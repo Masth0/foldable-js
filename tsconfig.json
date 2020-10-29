@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES5",
+    "rootDir": ".",
+    "outDir": "./public/build",
+    "lib": ["es2015", "DOM"],
+    "module": "ESNext",
+    "esModuleInterop": false,
+    "strict": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "__tests__/**/*.ts"
+  ]
+}
