@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+<div>
+    <button id="js-trigger" type="button">Trigger</button>
+    <div class="js-target" style="display: none;">Target</div>
+</div>
+
+<div>
+    <input id="aaa" class="js-checkbox" type="checkbox">
+    <label for="aaa">Click me to show the target</label>
+    <div class="js-target-checkbox" style="display: none;">Target checkbox</div>
+</div>
+
+
+<script src="../build/foldable.umd.js"></script>
+<script type="text/javascript" >
+  const a = new Foldable({
+    triggers: '#js-trigger',
+    targets: '.js-target',
+    stateByDefault: FoldableState.Close,
+    clickOutsideToResetState: true,
+    eventType: 'click',
+    open: function({triggers, targets, done}) {
+      console.log(this.stateName)
+      targets[0].style.display = 'block';
+      done();
+      console.log(this.stateName)
+    },
+    close: function({triggers, targets, done}) {
+      console.log(this.stateName)
+      targets[0].style.display = 'none';
+      done();
+      console.log(this.stateName)
+    }
+  });
+
+  const b = new Foldable({
+    triggers: '.js-checkbox',
+    targets: '.js-target-checkbox',
+    stateByDefault: FoldableState.Close,
+    clickOutsideToResetState: false,
+    eventType: 'change',
+    breakpoint: {min: 640, max: 1024, reset: true},
+    open: function({triggers, targets, done}) {
+      console.log(this.stateName)
+      targets[0].style.display = 'block';
+      done();
+      console.log(this.stateName)
+    },
+    close: function({triggers, targets, done}) {
+      console.log(this.stateName)
+      targets[0].style.display = 'none';
+      done();
+      console.log(this.stateName)
+    }
+  });
+  console.log(b);
+</script>
+</body>
+</html>
