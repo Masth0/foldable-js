@@ -1,4 +1,4 @@
-irstenum FoldableState {
+enum FoldableState {
   Close,
   Open,
   Animating
