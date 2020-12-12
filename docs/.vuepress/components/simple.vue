@@ -3,7 +3,7 @@
     <div class="utils_bar">
       <span v-if="foldableStateName" class="label"> Foldable state: <strong>{{ foldableStateName }}</strong></span>
       <label for="enable">
-        <input type="checkbox" id="enable" v-model="disable" @change="toggleDisable"> Disable Foldable instance
+        <input type="checkbox" id="enable" v-model="disable" @change="toggleDisable"> Disable Event listeners
       </label>
     </div>
     <br>
