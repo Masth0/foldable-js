@@ -5,15 +5,23 @@
   "main": "build/foldable.umd.js",
   "scripts": {
     "watch": "rollup -c -w rollup.config.js",
-    "build": "rollup -c rollup.config.js"
+    "build": "rollup -c rollup.config.js",
+    "docs:dev": "vuepress dev docs",
+    "docs:build": "vuepress build docs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "dependencies": {},
+  "dependencies": {
+    "animejs": "^3.2.1"
+  },
   "devDependencies": {
+    "@vuepress/plugin-active-header-links": "^1.7.1",
     "rollup": "^2.21.0",
     "rollup-plugin-typescript2": "^0.27.1",
-    "typescript": "^3.8.3"
+    "sass": "^1.29.0",
+    "sass-loader": "^10.1.0",
+    "typescript": "^4.1.2",
+    "vuepress": "^1.7.1"
   }
 }
