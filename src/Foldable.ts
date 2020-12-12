@@ -1,233 +1,219 @@
-enum FoldableState {
-  Close,
-  Open,
-  Animating
-}
-
-interface FoldableInterface {
-  triggers: string;
-  targets: string;
-  activeClass: string;
-  eventType: string;
-  stateByDefault: FoldableState;
-  clickOutsideToResetState: boolean;
-  breakpoint: BreakpointInterface|null;
-  open?: () => void;
-  close?: () => void;
-}
-
-interface BreakpointInterface {
-  reset: boolean;
-  min: number;
-  max: number;
-}
-
-interface CallbackArgumentsInterface {
-  event: Event|undefined|null;
-  triggers: HTMLElement[];
-  targets: HTMLElement[];
-  done: () => void;
-}
+import {FoldableInterface, FoldableState} from "./types";
+import {is} from "./utils";
 
 class Foldable {
   private readonly _triggers: HTMLElement[];
-  private readonly _targets: HTMLElement[];
-  private readonly _eventHandler: (e: Event) => void;
-  public config: FoldableInterface;
-  public state: FoldableState;
+  private readonly _targets: HTMLElement[] = [];
+  private readonly _options: FoldableInterface;
+  private readonly _handler: (e: Event) => Promise<any>;
+  private readonly _clickOutside: (e: Event) => Promise<any>;
+  private _state: FoldableState;
+
+  set state(newState: FoldableState) {
+    this._state = newState;
+    this.setClassOnTriggers();
+  }
+
+  get state(): FoldableState {
+    return this._state;
+  }
 
   get stateName(): string {
-    return FoldableState[this.state];
+    return FoldableState[this._state];
   }
 
-  constructor(options?: FoldableInterface) {
+  constructor(options: FoldableInterface) {
     const defaults: FoldableInterface = Foldable.getDefaults();
-    this.config = Object.assign({}, defaults, options);
+    this._options = Object.assign({}, defaults, options);
+    this._state = this._options.stateByDefault;
+    this._triggers = Foldable.parseToHtmlElementArray(this._options.triggers);
+    this._targets = Foldable.parseToHtmlElementArray(this._options.targets);
 
-    try {
-      this.checkEventType();
-    } catch (err) {
-      console.error(err);
-    }
-
-    this._triggers = [].slice.call(document.querySelectorAll(this.config.triggers));
-    this._targets = [].slice.call(document.querySelectorAll(this.config.targets));
-    this.state = this.config.stateByDefault;
-
-    this._eventHandler = (e: Event) => {
+    this._handler = async (e: Event) => {
       e.preventDefault();
-      this.toggle(e);
+      await this.eventHandler();
     }
 
-    this.manageEventsOnTriggers();
-    window.addEventListener('resize', this.debounce(() => {
-      this.manageEventsOnTriggers();
-    }, 100));
-  }
-
-  /**
-   *
-   * @param {FoldableState} state
-   */
-  public setState(state: FoldableState) {
-    this.state = state;
-  }
-
-  public hardReset() {
-    if (this.state !== this.config.stateByDefault) {
-      switch (this.state) {
-        case FoldableState.Open:
-          this.close();
-          break;
-        case FoldableState.Close:
-          this.open();
-          break;
+    this._clickOutside = async (e: Event) => {
+      if (e.target !== null) {
+        await this.clickOutsideHandler(<HTMLElement>e.target);
       }
     }
+
+    this.subscribeTriggers();
   }
 
-  public open(e?: Event) {
-    if (this.config.open !== undefined && typeof this.config.open === 'function') {
-      this.state = FoldableState.Animating;
-      Foldable.executeCallback(this.config.open, this, {
-        event: e,
-        triggers: this._triggers,
-        targets: this._targets,
-        done: () => {
-          this.setState(FoldableState.Open);
-        },
-      });
+  async open(): Promise<any> {
+    if (this._state !== FoldableState.Busy) {
+      this.state = FoldableState.Busy;
+       const result = await this._options.open.call<this, any[], any>(this, [
+        this._triggers,
+        this._targets
+      ]);
+      this.state = FoldableState.Open;
+      if (this._options.clickOutsideToResetState) {
+        // Return to config.stateByDefault if the current state is not the state by default.
+        document.documentElement.addEventListener('click', this._clickOutside);
+      }
+      return result;
     }
   }
 
-  public close(e?: Event) {
-    if (this.config.close !== undefined && typeof this.config.close === 'function') {
-      this.state = FoldableState.Animating;
-      Foldable.executeCallback(this.config.close, this, {
-        event: e,
-        triggers: this._triggers,
-        targets: this._targets,
-        done: () => {
-          this.setState(FoldableState.Close);
-        },
-      });
+  async close(): Promise<any> {
+    if (this._state !== FoldableState.Busy) {
+      this.state = FoldableState.Busy;
+      const result = await this._options.close.call<this, any[], any>(this, [
+        this._triggers,
+        this._targets
+      ]);
+      this.state = FoldableState.Close;
+      if (this._options.clickOutsideToResetState) {
+        // Return to config.stateByDefault if the current state is not the state by default.
+        document.documentElement.addEventListener('click', this._clickOutside);
+      }
+      return result;
     }
   }
 
-  public toggle(e?: Event) {
-    switch (this.state) {
+  enable() {
+    // subscribe events
+    this.subscribeTriggers();
+  }
+
+  disable() {
+    // unscubscribe events
+    this.unsubscribeTriggers();
+  }
+
+  private async eventHandler() {
+    if (this._state === FoldableState.Busy ) return;
+
+    switch (this._state) {
       case FoldableState.Open:
-        this.close(e);
+        // Close
+        await this.close();
         break;
       case FoldableState.Close:
-        this.open(e);
+        // Open
+        await this.open();
         break;
     }
+  }
 
-    const _this = this;
-    function handler(e: MouseEvent|TouchEvent) {
-      const target = <HTMLElement>e.target;
-      if (target !== null) {
-        const isOutsideFoldableElements = [_this.config.triggers, _this.config.targets].filter((s) => target.closest(s)).length > 0;
-        if (!isOutsideFoldableElements && _this.state !== _this.config.stateByDefault) {
-          _this.toggle();
-          // Remove the event
-          return (() => {
-            document.documentElement.removeEventListener('click', handler);
-          })();
-        }
+  private async clickOutsideHandler(target: HTMLElement|null) {
+    if (target !== null && !this.isFoldableElement(target) && this._state !== this._options.stateByDefault) {
+      // find ancestor
+      let ancestor: HTMLElement|null = target.parentElement;
+      while (ancestor !== null && !this.isFoldableElement(ancestor)) {
+        ancestor = ancestor.parentElement;
+      }
+      if (!this.isFoldableElement(ancestor)) {
+        await this.eventHandler();
+        // Remove the event
+        (() => {
+          document.documentElement.removeEventListener('click', this._clickOutside);
+        })();
       }
     }
-
-    // Close userNav Foldable when user click outside
-    if (this.config.clickOutsideToResetState) {
-      document.documentElement.addEventListener('click', handler);
-    }
-  }
-
-  private checkEventType() {
-    if (this.config.eventType !== 'click' && this.config.eventType !== 'change') {
-      throw `Events types allowed are click and change. Your config.eventType = '${this.config.eventType}'`;
-    }
-  }
-
-  private subscribeTriggers() {
-    this._triggers.forEach((trigger) => {
-      // Add events to each trigger
-      trigger.addEventListener(this.config.eventType, this._eventHandler);
-    });
-  }
-
-  private unsubscribeTriggers() {
-    if (this.config?.breakpoint?.reset) {
-      console.log('RESET');
-      this.hardReset();
-    }
-    this._triggers.forEach((trigger) => {
-      // Add events to each trigger
-      trigger.removeEventListener(this.config.eventType, this._eventHandler);
-    });
-  }
-
-  private manageEventsOnTriggers() {
-    if (this.config.breakpoint === null) {
-      this.subscribeTriggers();
-      return;
-    }
-
-    let wWidth = window.innerWidth;
-    // subscribeTriggers or unsubscribeTriggers depending on breakpoint
-    if (wWidth > this.config.breakpoint?.min && wWidth < this.config.breakpoint?.max) {
-      this.subscribeTriggers();
-    } else {
-      this.unsubscribeTriggers();
-    }
   }
 
   /**
-   * Execute callback after the delay
-   * @param {Function} callback
-   * @param {Number} delay
-   * @returns {Function}
+   * Add events
    * @private
    */
-  private debounce(callback: () => void, delay: number) {
-    let timer: number;
-    let _this = this;
-    return function() {
-      let args: any = arguments;
-      let context: Foldable = _this;
-      clearTimeout(timer);
-      timer = window.setTimeout(function () {
-        callback.apply(context, args);
-      }, delay);
+  private subscribeTriggers() {
+    this._triggers.forEach((trigger: HTMLElement) => {
+      trigger.addEventListener(this._options.eventType, this._handler);
+    });
+  }
+
+  /***
+   * Remove events
+   * @private
+   */
+  private unsubscribeTriggers() {
+    this._triggers.forEach((trigger) => {
+      trigger.removeEventListener(this._options.eventType, this._handler);
+    });
+  }
+
+  private setClassOnTriggers() {
+    switch (this._state) {
+      case FoldableState.Busy:
+        this._triggers.forEach((trigger) => {
+          trigger.classList.add(this._options.classes.busyClass);
+        });
+        break;
+      case FoldableState.Close:
+        this._triggers.forEach((trigger) => {
+          trigger.classList.remove(this._options.classes.busyClass);
+          trigger.classList.remove(this._options.classes.openClass);
+          trigger.classList.add(this._options.classes.closeClass);
+        });
+        break;
+      case FoldableState.Open:
+        this._triggers.forEach((trigger) => {
+          trigger.classList.remove(this._options.classes.busyClass);
+          trigger.classList.remove(this._options.classes.closeClass);
+          trigger.classList.add(this._options.classes.openClass);
+        });
+        break;
     }
   }
 
   /**
-   * Call call callback
-   * @param {function} fn
-   * @param {Foldable} ctx
-   * @param {} args
+   * Check if the element is present into triggers or targets
+   * @param {HTMLElement} element
+   * @private
    */
-  private static executeCallback(fn: () => void, ctx: Foldable, args: CallbackArgumentsInterface) {
-    (function() {
-      // @ts-ignore
-      fn.call(ctx, args);
-    })();
+  private isFoldableElement(element: HTMLElement|null): boolean {
+    if (element === null) return false;
+    return this._triggers.indexOf(element) !== -1 || this._targets.indexOf(element) !== -1;
   }
 
+  /**
+   * Transform value to HTMLElement[]
+   * @private
+   */
+  private static parseToHtmlElementArray(value: string|NodeList|Node|HTMLElement|HTMLElement[]): HTMLElement[] {
+    if (is.str(value)) {
+      return [].slice.call(document.querySelectorAll(value as string));
+    }
+
+    if (is.node(value)) {
+      return [<HTMLElement>value];
+    }
+
+    if (is.nodeList(value)) {
+      return [].slice.call(value);
+    }
+
+    if (is.array(value)) {
+      return [...value as []];
+    }
+
+    return [];
+  }
+
+  /**
+   * Return options by default
+   * @private
+   */
   private static getDefaults(): FoldableInterface {
     return {
-      triggers: 'foldable-trigger',
-      targets: 'foldable-target',
-      activeClass: 'active',
+      triggers: '',
+      targets: '',
+      classes: {
+        busyClass: 'f_busy',
+        closeClass: 'f_close',
+        openClass: 'f_open',
+        disabledClass: 'f_disabled'
+      },
       eventType: 'click',
       stateByDefault: FoldableState.Close,
       clickOutsideToResetState: true,
-      breakpoint: null,
-      open: undefined,
-      close: undefined,
+      open: async () => {},
+      close: async () => {},
     };
   }
 }
@@ -236,4 +222,3 @@ export {Foldable, FoldableState};
 
 (<any>window).Foldable = Foldable;
 (<any>window).FoldableState = FoldableState;
-
