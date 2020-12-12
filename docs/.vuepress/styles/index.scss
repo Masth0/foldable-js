@@ -1,0 +1,18 @@
+$accentColor: #3e71af;
+$borderColor: #eaecef;
+
+
+.utils_bar {
+  display: block;
+  padding: 20px 0;
+  border-top: 1px solid $borderColor;
+  border-bottom: 1px solid $borderColor;
+}
+
+.label {
+  display: inline-block;
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 16px;
+  background-color: rgba($accentColor, 0.2);
+}
