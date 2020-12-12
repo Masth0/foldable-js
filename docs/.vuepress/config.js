@@ -2,9 +2,7 @@ module.exports = {
   theme: '',
   title: ' Foldable-js',
   plugins: ['@vuepress/active-header-links'],
-  head: [
-    { text: 'Home', link: '/' },
-  ],
+  head: [],
   port: 8080,
   base: '/foldable-js/',
   configureWebpack: {},
