@@ -78,7 +78,9 @@
     }
   }
 
-  .f_trigger.f_open {
+  .f_trigger.f_disabled {
+    cursor: not-allowed;
+    background-color: grey;
   }
 
   .f_target.is-open {

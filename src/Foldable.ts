@@ -78,11 +78,17 @@ class Foldable {
   enable() {
     // subscribe events
     this.subscribeTriggers();
+    this._triggers.forEach((trigger) => {
+      trigger.classList.remove(this._options.classes.disabledClass);
+    });
   }
 
   disable() {
     // unscubscribe events
     this.unsubscribeTriggers();
+    this._triggers.forEach((trigger) => {
+      trigger.classList.add(this._options.classes.disabledClass);
+    });
   }
 
   private async eventHandler() {
