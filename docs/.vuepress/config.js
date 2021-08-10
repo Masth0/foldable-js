@@ -2,9 +2,7 @@ module.exports = {
   theme: '',
   title: ' Foldable-js',
   plugins: ['@vuepress/active-header-links'],
-  head: [
-    { text: 'Home', link: '/' },
-  ],
+  head: [],
   port: 8080,
   base: '/foldable-js/',
   configureWebpack: {},
@@ -21,11 +19,7 @@ module.exports = {
         ariaLabel: 'Examples menu',
         items: [
           { text: 'Basic Foldable', link: '/examples/simple' },
-/*          { text: 'Modal', link: '/examples/open-close' },
-          { text: 'Enable or Disable', link: '/examples/open-close' },
-          { text: 'Use of Reset()', link: '/examples/open-close' },
-          { text: 'Accordion', link: '/examples/open-close' },
-          { text: 'Fetch api', link: '/examples/open-close' },*/
+          { text: 'Modal', link: '/examples/modal' },
         ]
       },
       { text: 'github', link: 'https://github.com/Masth0/foldable-js' },

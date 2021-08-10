@@ -190,12 +190,20 @@
             });
         };
         Foldable.prototype.enable = function () {
+            var _this = this;
             // subscribe events
             this.subscribeTriggers();
+            this._triggers.forEach(function (trigger) {
+                trigger.classList.remove(_this._options.classes.disabledClass);
+            });
         };
         Foldable.prototype.disable = function () {
+            var _this = this;
             // unscubscribe events
             this.unsubscribeTriggers();
+            this._triggers.forEach(function (trigger) {
+                trigger.classList.add(_this._options.classes.disabledClass);
+            });
         };
         Foldable.prototype.eventHandler = function () {
             return __awaiter(this, void 0, void 0, function () {
