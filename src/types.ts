@@ -1,23 +1,29 @@
-export enum FoldableState {
-  Close,
-  Open,
-  Busy,
-}
-
-export interface FoldableInterface {
+export interface IFoldable {
   triggers: string|Node|NodeList|HTMLElement|HTMLElement[];
-  targets: string|Node|NodeList|HTMLElement|HTMLElement[];
-  classes: Classesinterface;
+  target: string|Node|HTMLElement;
+  classes:  IStatusClasses;
   eventType: string;
-  stateByDefault: FoldableState;
-  clickOutsideToResetState: boolean;
+  useFocusTrap: boolean;
+  statusByDefault: FoldableStatus; // if set to FoldableStatus.Opened, it's up to you to ensure that element is visible and has tabindex="0" on his focusable elements
+  enableClickOutside: boolean;
   open: () => Promise<any>;
   close: () => Promise<any>;
 }
 
-export interface Classesinterface {
+export enum FoldableStatus {
+  Closed,
+  Opened,
+  Busy,
+}
+
+export interface IStatusClasses {
   busyClass: string;
-  closeClass: string;
-  openClass: string;
+  closedClass: string;
+  openedClass: string;
   disabledClass: string
+}
+
+export enum Keycode {
+  Echap = 27,
+  Tab = 9,
 }

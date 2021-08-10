@@ -1,13 +1,12 @@
 export const is = {
-  str: (v: any) => typeof v === 'string',
-  node: (v: any) => {
+  array: (v: any): boolean => Array.isArray(v),
+  str: (v: any): boolean => typeof v === 'string',
+  nodeList: (v: any): boolean => v instanceof NodeList,
+  node: (v: any): boolean => {
     let vNode = v as Node;
     return !!vNode.nodeType;
   },
-  nodeList: (v: any) => {
-    return v instanceof NodeList;
-  },
-  array: (v: any) => {
-    return Array.isArray(v);
-  },
+  nullOrUndefined: function(val: any) {
+    return val === null || val === undefined;
+  }
 }
