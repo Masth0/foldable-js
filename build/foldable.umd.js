@@ -65,41 +65,127 @@
         return r;
     }
 
-    (function (FoldableState) {
-        FoldableState[FoldableState["Close"] = 0] = "Close";
-        FoldableState[FoldableState["Open"] = 1] = "Open";
-        FoldableState[FoldableState["Busy"] = 2] = "Busy";
-    })(exports.FoldableState || (exports.FoldableState = {}));
+    var FoldableStatus;
+    (function (FoldableStatus) {
+        FoldableStatus[FoldableStatus["Close"] = 0] = "Close";
+        FoldableStatus[FoldableStatus["Open"] = 1] = "Open";
+        FoldableStatus[FoldableStatus["Busy"] = 2] = "Busy";
+    })(FoldableStatus || (FoldableStatus = {}));
+    var Keycode;
+    (function (Keycode) {
+        Keycode[Keycode["Echap"] = 27] = "Echap";
+        Keycode[Keycode["Tab"] = 9] = "Tab";
+    })(Keycode || (Keycode = {}));
+
+    var findFocusableElements = function (container) {
+        var parent = container ? container : document.body;
+        var selectors = [
+            'a[href]',
+            'button',
+            'input',
+            'textarea',
+            'select',
+            'details > summary:first-of-type',
+            'video[controls]',
+            'audio[controls]',
+            '[tabindex="0"]'
+        ];
+        var selectorStr = selectors.join(',');
+        var elements = [].slice.call(parent.querySelectorAll(selectorStr));
+        return elements.filter(function (element) { return element.getBoundingClientRect().width > 0; });
+    };
+    var FocusTrap = /** @class */ (function () {
+        function FocusTrap(container) {
+            this.container = container;
+            this._focusables = findFocusableElements(this.container);
+            this._keyHandler = this.handle.bind(this);
+            this._lastElement = this._focusables[this._focusables.length - 1];
+            this._firstElement = this._focusables[0];
+        }
+        FocusTrap.prototype.handle = function (e) {
+            if (e.keyCode !== Keycode.Tab)
+                return;
+            if (e.shiftKey) {
+                if (document.activeElement === this._firstElement) {
+                    e.preventDefault();
+                    this._lastElement.focus();
+                }
+            }
+            else {
+                if (document.activeElement === this._lastElement) {
+                    e.preventDefault();
+                    this._firstElement.focus();
+                }
+            }
+        };
+        FocusTrap.prototype.update = function () {
+            this._focusables = findFocusableElements(this.container);
+            this._lastElement = this._focusables[this._focusables.length - 1];
+            this._firstElement = this._focusables[0];
+        };
+        FocusTrap.prototype.listen = function () {
+            this.container.addEventListener('keydown', this._keyHandler);
+        };
+        // Kill eventlistener ...
+        FocusTrap.prototype.dispose = function () {
+            this.container.removeEventListener('keydown', this._keyHandler);
+        };
+        return FocusTrap;
+    }());
 
     var is = {
+        array: function (v) { return Array.isArray(v); },
         str: function (v) { return typeof v === 'string'; },
+        nodeList: function (v) { return v instanceof NodeList; },
         node: function (v) {
             var vNode = v;
             return !!vNode.nodeType;
         },
-        nodeList: function (v) {
-            return v instanceof NodeList;
-        },
-        array: function (v) {
-            return Array.isArray(v);
-        },
+        nullOrUndefined: function (val) {
+            return val === null || val === undefined;
+        }
     };
+    /**
+     * Execute the callback after the delay
+     * @param {Function} callback
+     * @param {Number} delay
+     * @returns {Function}
+     */
+    function debounce(callback, delay) {
+        var timer;
+        return function () {
+            var args = arguments;
+            // @ts-ignore
+            var context = this;
+            clearTimeout(timer);
+            timer = setTimeout(function () {
+                // @ts-ignore
+                callback.apply(context, args);
+            }, delay);
+        };
+    }
 
     var Foldable = /** @class */ (function () {
         function Foldable(options) {
             var _this = this;
-            this._targets = [];
-            var defaults = Foldable.getDefaults();
-            this._options = Object.assign({}, defaults, options);
-            this._state = this._options.stateByDefault;
-            this._triggers = Foldable.parseToHtmlElementArray(this._options.triggers);
-            this._targets = Foldable.parseToHtmlElementArray(this._options.targets);
+            this._originalTrigger = undefined;
+            this._escapeHandlerAdded = false;
+            this._eventListenersAdded = false;
+            this._options = Object.assign({}, Foldable.defaults, options);
+            this._options.classes = Object.assign({}, Foldable.defaults.classes, options.classes);
+            this._options.breakpoints = Object.assign({}, Foldable.defaults.breakpoints, options.breakpoints);
+            this._status = this._options.statusByDefault;
+            this._triggers = Foldable.parseTriggersOptionsToArray(this._options.triggers);
+            this._target = is.str(this._options.target) ? document.querySelector(this._options.target) : this._options.target;
             this._handler = function (e) { return __awaiter(_this, void 0, void 0, function () {
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
                             e.preventDefault();
-                            return [4 /*yield*/, this.eventHandler()];
+                            if (this.status === this._options.statusByDefault) {
+                                this._originalTrigger = e.target;
+                            }
+                            return [4 /*yield*/, this.toggle()];
                         case 1:
                             _a.sent();
                             return [2 /*return*/];
@@ -119,125 +205,291 @@
                     }
                 });
             }); };
-            this.subscribeTriggers();
+            this._keyboardHandler = function (e) { return __awaiter(_this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            e.stopPropagation();
+                            if (!(e.keyCode === Keycode.Echap && this._status !== this._options.statusByDefault)) return [3 /*break*/, 2];
+                            e.preventDefault();
+                            return [4 /*yield*/, this.toggle()];
+                        case 1:
+                            _a.sent();
+                            _a.label = 2;
+                        case 2: return [2 /*return*/];
+                    }
+                });
+            }); };
+            this._breakpointsHandler = debounce(function (e) { return __awaiter(_this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    switch (_a.label) {
+                        case 0:
+                            if (!this.isInBreakpointArea()) return [3 /*break*/, 1];
+                            if (!this._eventListenersAdded) {
+                                this.addTriggersEvents();
+                            }
+                            return [3 /*break*/, 4];
+                        case 1:
+                            if (!this._eventListenersAdded) return [3 /*break*/, 3];
+                            return [4 /*yield*/, this.toggle()];
+                        case 2:
+                            _a.sent();
+                            this.removeTriggersEvents();
+                            _a.label = 3;
+                        case 3:
+                            this.removeA11y();
+                            _a.label = 4;
+                        case 4: return [2 /*return*/];
+                    }
+                });
+            }); }, 300);
+            if (this._options.statusByDefault === FoldableStatus.Open) {
+                this._status = FoldableStatus.Close;
+                this.toggle();
+            }
+            // Add all events listeners
+            this.enable();
         }
-        Object.defineProperty(Foldable.prototype, "state", {
+        Object.defineProperty(Foldable.prototype, "status", {
             get: function () {
-                return this._state;
-            },
-            set: function (newState) {
-                this._state = newState;
-                this.setClassOnTriggers();
+                return this._status;
             },
             enumerable: false,
             configurable: true
         });
-        Object.defineProperty(Foldable.prototype, "stateName", {
+        Object.defineProperty(Foldable.prototype, "statusName", {
             get: function () {
-                return exports.FoldableState[this._state];
+                return FoldableStatus[this.status];
             },
             enumerable: false,
             configurable: true
         });
-        Foldable.prototype.open = function () {
+        Object.defineProperty(Foldable.prototype, "clickOutside", {
+            set: function (val) {
+                this._options.enableClickOutside = val;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        Object.defineProperty(Foldable.prototype, "focusTrap", {
+            set: function (val) {
+                this._options.useFocusTrap = val;
+            },
+            enumerable: false,
+            configurable: true
+        });
+        // Reverse the Foldable status
+        Foldable.prototype.toggle = function () {
+            var _a;
             return __awaiter(this, void 0, void 0, function () {
-                var result;
-                return __generator(this, function (_a) {
-                    switch (_a.label) {
+                var _b;
+                var _this = this;
+                return __generator(this, function (_c) {
+                    switch (_c.label) {
                         case 0:
-                            if (!(this._state !== exports.FoldableState.Busy)) return [3 /*break*/, 2];
-                            this.state = exports.FoldableState.Busy;
-                            return [4 /*yield*/, this._options.open.call(this, [
-                                    this._triggers,
-                                    this._targets
-                                ])];
-                        case 1:
-                            result = _a.sent();
-                            this.state = exports.FoldableState.Open;
-                            if (this._options.clickOutsideToResetState) {
-                                // Return to config.stateByDefault if the current state is not the state by default.
+                            if (this._status === FoldableStatus.Busy)
+                                return [2 /*return*/];
+                            _b = this._status;
+                            switch (_b) {
+                                case FoldableStatus.Open: return [3 /*break*/, 1];
+                                case FoldableStatus.Close: return [3 /*break*/, 3];
+                            }
+                            return [3 /*break*/, 5];
+                        case 1: return [4 /*yield*/, this._close().then(function () {
+                                var _a;
+                                _this._status = FoldableStatus.Close;
+                                _this.setClasses();
+                                _this.setA11y();
+                                // if (is.nullOrUndefined(this._focusTrap)) {
+                                //   this._focusTrap?.dispose(); // Remove focusTrap event listener
+                                // }
+                                (_a = _this._originalTrigger) === null || _a === void 0 ? void 0 : _a.focus();
+                            })];
+                        case 2:
+                            _c.sent();
+                            return [3 /*break*/, 5];
+                        case 3: return [4 /*yield*/, this._open().then(function () {
+                                var _a;
+                                _this._status = FoldableStatus.Open;
+                                _this.setClasses();
+                                _this.setA11y();
+                                (_a = _this._target) === null || _a === void 0 ? void 0 : _a.focus();
+                            })];
+                        case 4:
+                            _c.sent();
+                            return [3 /*break*/, 5];
+                        case 5:
+                            // Enable clickOutside
+                            if (this._status !== this._options.statusByDefault && this._options.enableClickOutside) {
                                 document.documentElement.addEventListener('click', this._clickOutside);
                             }
-                            return [2 /*return*/, result];
-                        case 2: return [2 /*return*/];
+                            // Enable focusTrap
+                            if (this._status !== this._options.statusByDefault && this._options.useFocusTrap) {
+                                this.enableFocusTrap();
+                            }
+                            else {
+                                (_a = this._focusTrap) === null || _a === void 0 ? void 0 : _a.dispose();
+                            }
+                            return [2 /*return*/];
                     }
                 });
             });
         };
-        Foldable.prototype.close = function () {
+        Foldable.prototype._open = function () {
             return __awaiter(this, void 0, void 0, function () {
-                var result;
                 return __generator(this, function (_a) {
-                    switch (_a.label) {
-                        case 0:
-                            if (!(this._state !== exports.FoldableState.Busy)) return [3 /*break*/, 2];
-                            this.state = exports.FoldableState.Busy;
-                            return [4 /*yield*/, this._options.close.call(this, [
-                                    this._triggers,
-                                    this._targets
-                                ])];
-                        case 1:
-                            result = _a.sent();
-                            this.state = exports.FoldableState.Close;
-                            if (this._options.clickOutsideToResetState) {
-                                // Return to config.stateByDefault if the current state is not the state by default.
-                                document.documentElement.addEventListener('click', this._clickOutside);
-                            }
-                            return [2 /*return*/, result];
-                        case 2: return [2 /*return*/];
-                    }
+                    this._status = FoldableStatus.Busy;
+                    this.setClasses();
+                    return [2 /*return*/, this._options.open.call(this, [
+                            this._triggers,
+                            this._target
+                        ])];
                 });
             });
         };
+        Foldable.prototype._close = function () {
+            return __awaiter(this, void 0, void 0, function () {
+                return __generator(this, function (_a) {
+                    this._status = FoldableStatus.Busy;
+                    this.setClasses();
+                    return [2 /*return*/, this._options.close.call(this, [
+                            this._triggers,
+                            this._target
+                        ])];
+                });
+            });
+        };
+        /**
+         * Init
+         * Add all events listeners
+         * Instantiate the focusTrap or not
+         * Remove disable classe
+         */
         Foldable.prototype.enable = function () {
             var _this = this;
-            // subscribe events
-            this.subscribeTriggers();
-            this._triggers.forEach(function (trigger) {
-                trigger.classList.remove(_this._options.classes.disabledClass);
-            });
+            if (this._options.breakpoints.min !== null || this._options.breakpoints.max !== null) {
+                window.addEventListener('resize', this._breakpointsHandler);
+            }
+            if (this.isInBreakpointArea()) {
+                this.addTriggersEvents();
+                this._triggers.forEach(function (trigger) {
+                    trigger.classList.remove(_this._options.classes.disabledClass);
+                });
+                if (this._options.useFocusTrap) {
+                    this.enableFocusTrap();
+                }
+            }
         };
+        /**
+         * Disable all events listeners on triggers
+         * Add disabled classe
+         * Dispose the focus trap
+         */
         Foldable.prototype.disable = function () {
             var _this = this;
-            // unscubscribe events
-            this.unsubscribeTriggers();
+            this.removeTriggersEvents();
             this._triggers.forEach(function (trigger) {
                 trigger.classList.add(_this._options.classes.disabledClass);
             });
+            window.removeEventListener('resize', this._breakpointsHandler);
         };
-        Foldable.prototype.eventHandler = function () {
-            return __awaiter(this, void 0, void 0, function () {
-                var _a;
-                return __generator(this, function (_b) {
-                    switch (_b.label) {
-                        case 0:
-                            if (this._state === exports.FoldableState.Busy)
-                                return [2 /*return*/];
-                            _a = this._state;
-                            switch (_a) {
-                                case exports.FoldableState.Open: return [3 /*break*/, 1];
-                                case exports.FoldableState.Close: return [3 /*break*/, 3];
-                            }
-                            return [3 /*break*/, 5];
-                        case 1: 
-                        // Close
-                        return [4 /*yield*/, this.close()];
-                        case 2:
-                            // Close
-                            _b.sent();
-                            return [3 /*break*/, 5];
-                        case 3: 
-                        // Open
-                        return [4 /*yield*/, this.open()];
-                        case 4:
-                            // Open
-                            _b.sent();
-                            return [3 /*break*/, 5];
-                        case 5: return [2 /*return*/];
-                    }
-                });
-            });
+        Foldable.prototype.enableFocusTrap = function () {
+            if (this._focusTrap === undefined && this._target !== null) {
+                this._focusTrap = new FocusTrap(this._target);
+            }
+            if (this._focusTrap instanceof FocusTrap && this._target !== null) {
+                this._focusTrap.listen();
+                this._focusTrap.update();
+            }
         };
+        Foldable.prototype.disableFocusTrap = function () {
+            if (this._focusTrap instanceof FocusTrap) {
+                this._focusTrap.dispose();
+                this._focusTrap = undefined;
+            }
+        };
+        Foldable.prototype.enableEscapeHandler = function () {
+            var _a;
+            // Add eventListener if not added
+            if (!this._escapeHandlerAdded) {
+                (_a = this._target) === null || _a === void 0 ? void 0 : _a.addEventListener('keyup', this._keyboardHandler);
+                this._escapeHandlerAdded = true;
+            }
+        };
+        Foldable.prototype.disableEscapeHandler = function () {
+            var _a;
+            // Remove eventListener if already added
+            if (this._escapeHandlerAdded) {
+                (_a = this._target) === null || _a === void 0 ? void 0 : _a.removeEventListener('keyup', this._keyboardHandler);
+                this._escapeHandlerAdded = false;
+            }
+        };
+        /**
+         * Add attributes for a11Y
+         * @private
+         */
+        Foldable.prototype.setA11y = function () {
+            var _a, _b;
+            var isOpen = this._status === FoldableStatus.Open;
+            var isClose = this._status === FoldableStatus.Close;
+            // Add attributes on triggers
+            for (var i = 0; i < this._triggers.length; i++) {
+                this._triggers[i].setAttribute('aria-expanded', isOpen.toString());
+            }
+            // Add attributes on the target
+            (_a = this._target) === null || _a === void 0 ? void 0 : _a.setAttribute('aria-hidden', isClose.toString());
+            (_b = this._target) === null || _b === void 0 ? void 0 : _b.setAttribute('tabindex', isClose ? '-1' : '0');
+            this.makeTabbable(isOpen);
+        };
+        Foldable.prototype.removeA11y = function () {
+            var _a, _b;
+            for (var i = 0; i < this._triggers.length; i++) {
+                this._triggers[i].removeAttribute('aria-expanded');
+            }
+            // Add attributes on the target
+            (_a = this._target) === null || _a === void 0 ? void 0 : _a.removeAttribute('aria-hidden');
+            (_b = this._target) === null || _b === void 0 ? void 0 : _b.removeAttribute('tabindex');
+        };
+        /**
+         * A11y - Make focusable elements tabbable
+         * @param {boolean} val // make tabbable or not...
+         * @private
+         */
+        Foldable.prototype.makeTabbable = function (val) {
+            var focusables = this._target !== null ? findFocusableElements(this._target) : [];
+            for (var i = 0; i < focusables.length; i++) {
+                focusables[i].setAttribute('tabindex', val ? '0' : '-1');
+            }
+        };
+        Foldable.prototype.setClasses = function () {
+            var _this = this;
+            switch (this._status) {
+                case FoldableStatus.Busy:
+                    this._triggers.forEach(function (trigger) {
+                        trigger.classList.add(_this._options.classes.busyClass);
+                    });
+                    break;
+                case FoldableStatus.Close:
+                    this._triggers.forEach(function (trigger) {
+                        trigger.classList.remove(_this._options.classes.busyClass);
+                        trigger.classList.remove(_this._options.classes.openedClass);
+                        trigger.classList.add(_this._options.classes.closedClass);
+                    });
+                    break;
+                case FoldableStatus.Open:
+                    this._triggers.forEach(function (trigger) {
+                        trigger.classList.remove(_this._options.classes.busyClass);
+                        trigger.classList.remove(_this._options.classes.closedClass);
+                        trigger.classList.add(_this._options.classes.openedClass);
+                    });
+                    break;
+            }
+        };
+        /**
+         * Click outside to reverse the foldable status
+         * @param {HTMLElement} target
+         * @private
+         */
         Foldable.prototype.clickOutsideHandler = function (target) {
             return __awaiter(this, void 0, void 0, function () {
                 var ancestor;
@@ -245,13 +497,13 @@
                 return __generator(this, function (_a) {
                     switch (_a.label) {
                         case 0:
-                            if (!(target !== null && !this.isFoldableElement(target) && this._state !== this._options.stateByDefault)) return [3 /*break*/, 2];
+                            if (!(target !== null && !this.isFoldableElement(target) && this._status !== this._options.statusByDefault)) return [3 /*break*/, 2];
                             ancestor = target.parentElement;
                             while (ancestor !== null && !this.isFoldableElement(ancestor)) {
                                 ancestor = ancestor.parentElement;
                             }
                             if (!!this.isFoldableElement(ancestor)) return [3 /*break*/, 2];
-                            return [4 /*yield*/, this.eventHandler()];
+                            return [4 /*yield*/, this.toggle()];
                         case 1:
                             _a.sent();
                             // Remove the event
@@ -268,105 +520,99 @@
          * Add events
          * @private
          */
-        Foldable.prototype.subscribeTriggers = function () {
+        Foldable.prototype.addTriggersEvents = function () {
             var _this = this;
+            var _a;
             this._triggers.forEach(function (trigger) {
                 trigger.addEventListener(_this._options.eventType, _this._handler);
             });
+            // Escape keyup listener works only when the target is visible.
+            // In case of statusByDefault is set to FoldableStatus.Opened this listener is useless
+            // So it will use only when the statusByDefault is set to FoldableStatus.Closed
+            if (this._options.statusByDefault === FoldableStatus.Close) {
+                (_a = this._target) === null || _a === void 0 ? void 0 : _a.addEventListener('keyup', this._keyboardHandler);
+                this._escapeHandlerAdded = true;
+            }
+            this._eventListenersAdded = true;
         };
-        /***
+        /**
          * Remove events
          * @private
          */
-        Foldable.prototype.unsubscribeTriggers = function () {
+        Foldable.prototype.removeTriggersEvents = function () {
             var _this = this;
+            var _a;
             this._triggers.forEach(function (trigger) {
                 trigger.removeEventListener(_this._options.eventType, _this._handler);
             });
-        };
-        Foldable.prototype.setClassOnTriggers = function () {
-            var _this = this;
-            switch (this._state) {
-                case exports.FoldableState.Busy:
-                    this._triggers.forEach(function (trigger) {
-                        trigger.classList.add(_this._options.classes.busyClass);
-                    });
-                    break;
-                case exports.FoldableState.Close:
-                    this._triggers.forEach(function (trigger) {
-                        trigger.classList.remove(_this._options.classes.busyClass);
-                        trigger.classList.remove(_this._options.classes.openClass);
-                        trigger.classList.add(_this._options.classes.closeClass);
-                    });
-                    break;
-                case exports.FoldableState.Open:
-                    this._triggers.forEach(function (trigger) {
-                        trigger.classList.remove(_this._options.classes.busyClass);
-                        trigger.classList.remove(_this._options.classes.closeClass);
-                        trigger.classList.add(_this._options.classes.openClass);
-                    });
-                    break;
+            if (this._escapeHandlerAdded) {
+                (_a = this._target) === null || _a === void 0 ? void 0 : _a.removeEventListener('keyup', this._keyboardHandler);
             }
+            this._eventListenersAdded = false;
+        };
+        Foldable.prototype.isInBreakpointArea = function () {
+            var min = this._options.breakpoints.min;
+            var max = this._options.breakpoints.max;
+            var wWidth = window.innerWidth;
+            return min === null && max === null ||
+                min !== null && max === null && wWidth >= min ||
+                min === null && max !== null && wWidth <= max ||
+                min !== null && max !== null && wWidth >= min && wWidth <= max;
         };
         /**
-         * Check if the element is present into triggers or targets
+         * Check if the element is present into triggers or target
          * @param {HTMLElement} element
          * @private
          */
         Foldable.prototype.isFoldableElement = function (element) {
             if (element === null)
                 return false;
-            return this._triggers.indexOf(element) !== -1 || this._targets.indexOf(element) !== -1;
+            return this._triggers.indexOf(element) !== -1 || element === this._target;
+        };
+        Foldable.prototype.findOriginalTrigger = function (target) {
+            return undefined;
         };
         /**
          * Transform value to HTMLElement[]
          * @private
          */
-        Foldable.parseToHtmlElementArray = function (value) {
-            if (is.str(value)) {
+        Foldable.parseTriggersOptionsToArray = function (value) {
+            if (is.str(value))
                 return [].slice.call(document.querySelectorAll(value));
-            }
-            if (is.node(value)) {
+            if (is.node(value))
                 return [value];
-            }
-            if (is.nodeList(value)) {
+            if (is.nodeList(value))
                 return [].slice.call(value);
-            }
-            if (is.array(value)) {
+            if (is.array(value))
                 return __spreadArrays(value);
-            }
             return [];
         };
-        /**
-         * Return options by default
-         * @private
-         */
-        Foldable.getDefaults = function () {
-            var _this = this;
-            return {
-                triggers: '',
-                targets: '',
-                classes: {
-                    busyClass: 'f_busy',
-                    closeClass: 'f_close',
-                    openClass: 'f_open',
-                    disabledClass: 'f_disabled'
-                },
-                eventType: 'click',
-                stateByDefault: exports.FoldableState.Close,
-                clickOutsideToResetState: true,
-                open: function () { return __awaiter(_this, void 0, void 0, function () { return __generator(this, function (_a) {
-                    return [2 /*return*/];
-                }); }); },
-                close: function () { return __awaiter(_this, void 0, void 0, function () { return __generator(this, function (_a) {
-                    return [2 /*return*/];
-                }); }); },
-            };
+        Foldable.defaults = {
+            triggers: [],
+            target: '',
+            breakpoints: {
+                min: null,
+                max: null // <= 640
+            },
+            classes: {
+                busyClass: 'f_busy',
+                closedClass: 'f_closed',
+                openedClass: 'f_opened',
+                disabledClass: 'f_disabled'
+            },
+            eventType: 'click',
+            statusByDefault: 0,
+            enableClickOutside: true,
+            useFocusTrap: false,
+            open: function () { return __awaiter(void 0, void 0, void 0, function () { return __generator(this, function (_a) {
+                return [2 /*return*/];
+            }); }); },
+            close: function () { return __awaiter(void 0, void 0, void 0, function () { return __generator(this, function (_a) {
+                return [2 /*return*/];
+            }); }); },
         };
         return Foldable;
     }());
-    window.Foldable = Foldable;
-    window.FoldableState = exports.FoldableState;
 
     exports.Foldable = Foldable;
 
