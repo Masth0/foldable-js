@@ -10,3 +10,23 @@ export const is = {
     return val === null || val === undefined;
   }
 }
+
+/**
+ * Execute the callback after the delay
+ * @param {Function} callback
+ * @param {Number} delay
+ * @returns {Function}
+ */
+export function debounce<T, R>(callback: (e: T) => R, delay: number) {
+  let timer: ReturnType<typeof setTimeout>;
+  return function() {
+    let args: IArguments = arguments;
+    // @ts-ignore
+    let context: any = this;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      // @ts-ignore
+      callback.apply(context, args);
+    }, delay)
+  }
+}

@@ -14,20 +14,22 @@ const findFocusableElements = function(container?: HTMLElement): HTMLElement[] {
     '[tabindex="0"]'
   ];
   const selectorStr = selectors.join(',');
-  return [].slice.call(parent.querySelectorAll(selectorStr));
+  let elements = [].slice.call(parent.querySelectorAll(selectorStr));
+
+  return elements.filter((element: HTMLElement) => element.getBoundingClientRect().width > 0);
 }
 
 
 class FocusTrap {
-  private readonly _focusables: HTMLElement[];
-  private readonly _lastElement: HTMLElement;
-  private readonly _firstElement: HTMLElement;
+  private _focusables: HTMLElement[];
+  private _lastElement: HTMLElement;
+  private _firstElement: HTMLElement;
   private readonly _keyHandler: (e: KeyboardEvent) => void;
   private container: HTMLElement;
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this._focusables = findFocusableElements(container);
+    this._focusables = findFocusableElements(this.container);
     this._keyHandler = this.handle.bind(this);
     this._lastElement = this._focusables[this._focusables.length -1];
     this._firstElement = this._focusables[0];
@@ -49,13 +51,19 @@ class FocusTrap {
     }
   }
 
+  update() {
+    this._focusables = findFocusableElements(this.container);
+    this._lastElement = this._focusables[this._focusables.length -1];
+    this._firstElement = this._focusables[0];
+  }
+
   listen() {
-    window.addEventListener('keydown', this._keyHandler);
+    this.container.addEventListener('keydown', this._keyHandler);
   }
 
   // Kill eventlistener ...
   dispose() {
-    window.removeEventListener('keydown', this._keyHandler);
+    this.container.removeEventListener('keydown', this._keyHandler);
   }
 
 }
