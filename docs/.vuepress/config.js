@@ -1,4 +1,5 @@
 module.exports = {
+  base: '/foldable-js/',
   lang: 'en-US',
   title: 'Foldable js',
   description: 'Open|Close things in webpage',

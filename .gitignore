@@ -2,5 +2,6 @@
 .vscode
 /node_modules
 npm-debug.log*
-.vuepress/.cache
-.vuepress/.temp
+docs/.vuepress/.cache
+docs/.vuepress/.temp
+docs/.vuepress/dist
