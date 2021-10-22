@@ -1,0 +1,91 @@
+@use "sass:math";
+
+$navburger-bg-color: transparent;
+$navburger-bg-color-active: transparent;
+$navsteak-bg-color: white;
+$navsteak-bg-color-active: white;
+$navsteak-width: 25px;
+$navsteak-height: 2px;
+$navsteak-space: 5px;
+$navburger-bp: 1024px;
+
+.navburger {
+  display: block;
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 0;
+  border-radius: 0;
+  width: 50px;
+  height: 50px;
+  background-color: $navburger-bg-color;
+  box-shadow: none;
+  border: 0;
+  transform: translate(0, 0);
+  z-index: 999;
+
+  @media screen and (min-width: $navburger-bp) {
+    display: none;
+  }
+}
+
+.navburger:hover,
+.navburger:focus {
+  background-color: transparent;
+  outline: 1px dotted color('secondary');
+}
+
+.navsteak {
+  position: relative;
+  margin: 0 auto;
+  display: block;
+  width: $navsteak-width;
+  height: $navsteak-height;
+  background-color: $navsteak-bg-color;
+  border-radius: 1px;
+  transform: rotate(0);
+  transition: all ease 300ms;
+}
+
+.navsteak:before,
+.navsteak:after {
+  content: '';
+  position: relative;
+  display: block;
+  height: 100%;
+  width: 100%;
+  background-color: $navsteak-bg-color;
+  opacity: 1;
+  border-radius: 1px;
+  transform-origin: center center;
+  transform: rotate(0) scale(1);
+  transition: all ease 300ms;
+}
+
+.navsteak:before {
+  top: ($navsteak-height + $navsteak-space) * -1;
+}
+
+.navsteak:after {
+  top: $navsteak-space;
+}
+
+//___ Active
+.navburger.is-active {
+
+  .navsteak {
+    background-color: rgba($navsteak-bg-color, 0);
+  }
+
+  .navsteak:before {
+    top: $navsteak-height * 0.5;
+    transform: rotate(45deg);
+    background-color: $navsteak-bg-color-active;
+  }
+
+  .navsteak:after {
+    top: ($navsteak-height * 0.5) * -1;
+    transform: rotate(-45deg);
+    background-color: $navsteak-bg-color-active;
+  }
+}
