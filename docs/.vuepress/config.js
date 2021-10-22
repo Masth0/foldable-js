@@ -1,28 +1,37 @@
 module.exports = {
-  theme: '',
-  title: ' Foldable-js',
-  plugins: ['@vuepress/active-header-links'],
-  head: [],
-  port: 8080,
-  base: '/foldable-js/',
-  configureWebpack: {},
+  lang: 'en-US',
+  title: 'Foldable js',
+  description: 'Open|Close things in webpage',
+  plugins: [['@vuepress/register-components', true]],
   markdown: {
     lineNumbers: true
   },
   themeConfig: {
-    search: false,
-    // logo: '',
-    nav: [
-      { text: 'Home', link: '/' },
+    logo: '',
+    activeHeaderLinks: true,
+    sidebar: false,
+    navbar: [
       {
-        text: 'Examples',
-        ariaLabel: 'Examples menu',
-        items: [
-          { text: 'Basic Foldable', link: '/examples/simple' },
-          { text: 'Modal', link: '/examples/modal' },
-        ]
+        text: 'Home',
+        link: '/',
       },
-      { text: 'github', link: 'https://github.com/Masth0/foldable-js' },
+      {
+        text: 'Demos',
+        children: [
+          {
+            text: 'basic',
+            link: '/demos/basic.md'
+          },
+          {
+            text: 'Modal',
+            link: '/demos/modal.md'
+          },
+          {
+            text: 'Menu',
+            link: '/demos/menu.md'
+          },
+        ],
+      },
     ],
-  }
-};
+  },
+}
